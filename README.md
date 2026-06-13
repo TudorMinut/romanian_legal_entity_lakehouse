@@ -5,8 +5,6 @@ This project builds a warehouse for Romanian company analytics from national pub
 The platform is built around:
 
 - `16` years of annual MFinante financial statement datasets from `2010` to `2025`
-- one normalized company dimension row per legal entity in the warehouse
-- one financial fact row per company and reporting year
 
 The warehouse is meant to cover all companies present in the Romanian public source data, not a sample dataset.
 
@@ -36,27 +34,9 @@ For each company, the model is designed to store a mix of identity, registry, cl
 - [Architecture Diagram](C:/ro_company_analytics/Images/architecture.drawio)
 - [dbdiagram Source](C:/ro_company_analytics/silver_star_schema.dbml)
 
-```mermaid
-flowchart TD
-    sources["Romanian Government APIs<br/>ONRC / MFinante / data.gov.ro"]
-    ingestion["AWS ECS Fargate<br/>containerized ingestion"]
-    s3["AWS S3 Raw Data Lake<br/>raw_v2 snapshots + metadata"]
-    adapter["Unity Catalog external location<br/>S3 access adapter"]
-    bronze["Bronze Layer"]
-    silver["Silver Layer"]
-    gold["Gold Layer"]
-    powerbi["Power BI"]
+![Architecture Diagram](Images/architecture.png)
 
-    sources --> ingestion
-    ingestion --> s3
-    s3 --> adapter
-    adapter --> bronze
-    bronze --> silver
-    silver --> gold
-    gold --> powerbi
-```
-
-![Silver Data Model](C:/ro_company_analytics/Images/data_model.png)
+![Silver Data Model](Images/data_model.png)
 
 ## What It Does
 
@@ -66,6 +46,19 @@ flowchart TD
 - Uses Databricks with Unity Catalog to read and transform the lake
 - Produces normalized Silver entities and BI-ready Gold outputs
 - Feeds Power BI dashboards and reporting
+
+## Impact
+
+This app turns fragmented Romanian public company data into a usable analytical platform. Instead of manually combining messy registry files, CAEN mappings, company status tables, and yearly financial statement exports, it gives you a single warehouse that can be queried consistently across companies, industries, years, and geographies.
+
+That makes the data much more useful for:
+
+- regional economic analysis by county and locality
+- company benchmarking across turnover, profit, debt, capital, and employees
+- sector analysis using official CAEN classifications
+- identifying top companies by year, industry, and location
+- lead generation and market mapping for Romanian businesses
+- building Power BI dashboards for decision-making without hand-cleaning source files every time
 
 ## Source Data
 
@@ -218,17 +211,6 @@ Recommended measures:
 - `SUM(datorii)`
 - `SUM(capitaluri_proprii)`
 - `COUNTDISTINCT(cui)`
-
-## Security Notes
-
-No live credentials or private keys were found in tracked project files during the repo check. The ignore list was tightened to also cover common local security/state artifacts:
-
-- `.databrickscfg`
-- `.databricks/`
-- `.terraform/`
-- `*.tfstate*`
-- `*.tfvars`
-- `.ipynb_checkpoints/`
 
 Important modeling rule:
 
