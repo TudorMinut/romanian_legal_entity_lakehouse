@@ -31,10 +31,10 @@ For each company, the model is designed to store a mix of identity, registry, cl
 
 ## Diagrams
 
-- [Architecture Diagram](C:/ro_company_analytics/Images/architecture.drawio)
+- [Architecture Diagram](C:/ro_company_analytics/Images/architecture.jpeg)
 - [dbdiagram Source](C:/ro_company_analytics/silver_star_schema.dbml)
 
-![Architecture Diagram](Images/architecture.png)
+![Architecture Diagram](Images/architecture.jpg)
 
 ![Silver Data Model](Images/data_model.png)
 
