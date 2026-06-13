@@ -6,6 +6,12 @@ The platform is built around:
 
 - `16` years of annual MFinante financial statement datasets from `2010` to `2025`
 
+## Architecture Diagram
+
+- [Architecture Diagram](C:/ro_company_analytics/Images/architecture.drawio)
+
+![Architecture Diagram](Images/architecture.jpg)
+
 The warehouse is meant to cover all companies present in the Romanian public source data, not a sample dataset.
 
 For each company, the model is designed to store a mix of identity, registry, classification, geography, and finance data such as:
@@ -21,20 +27,15 @@ For each company, the model is designed to store a mix of identity, registry, cl
 
 ## Tech Stack
 
-- AWS (`ECS Fargate`, `S3`, `ECR`, `EventBridge`, `CloudWatch`)
+- AWS (`ECS Fargate`, `S3 Bucket`, `ECR`, `EventBridge`, `CloudWatch`)
 - Docker
-- Python `3.12` (`PySpark`)
+- Python (PySpark)
 - Databricks
-- Unity Catalog
-- Delta Lake
 - Power BI
 
-## Diagrams
+## Data Model Diagram
 
-- [Architecture Diagram](C:/ro_company_analytics/Images/architecture.jpeg)
 - [dbdiagram Source](C:/ro_company_analytics/silver_star_schema.dbml)
-
-![Architecture Diagram](Images/architecture.jpg)
 
 ![Silver Data Model](Images/data_model.png)
 
@@ -165,8 +166,6 @@ Current notebook execution order:
 8. `notebooks/02_gold_layer/gold_company_financial_summary.ipynb`
 9. `notebooks/02_gold_layer/gold_location_caen_year_stats.ipynb`
 10. `notebooks/02_gold_layer/gold_top_companies.ipynb`
-
-## Silver Data Model
 
 Silver tables:
 
