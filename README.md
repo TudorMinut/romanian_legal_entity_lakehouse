@@ -1,4 +1,4 @@
-# Romanian Company Analytics Platform
+# Romanian Legal Entity Lakehouse
 
 This project builds a warehouse for Romanian company analytics from national public data sources. It is designed to ingest the Romanian company universe exposed by ONRC and MFinante, store raw snapshots in AWS S3, normalize them in Databricks, and expose analytics-ready outputs to Power BI.
 
