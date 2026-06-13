@@ -47,6 +47,18 @@ config/local/
 config/*.local.json
 secrets/
 .secrets/
+.databricks/
+.databrickscfg
+.ipynb_checkpoints/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Temporary files
 tmp/

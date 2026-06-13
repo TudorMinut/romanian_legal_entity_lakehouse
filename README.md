@@ -1,72 +1,102 @@
 # Romanian Company Analytics Platform
 
-Data platform for collecting Romanian company registry and financial datasets, storing raw files in AWS S3, transforming them in Databricks with a Bronze/Silver/Gold medallion model, and exposing analytics-ready tables to Power BI.
+This project builds a warehouse for Romanian company analytics from national public data sources. It is designed to ingest the Romanian company universe exposed by ONRC and MFinante, store raw snapshots in AWS S3, normalize them in Databricks, and expose analytics-ready outputs to Power BI.
 
-## Architecture
+The platform is built around:
 
-```text
-data.gov.ro / ONRC / MFinante
-        |
-        v
-Python downloader on AWS ECS Fargate
-        |
-        v
-AWS S3 raw data lake
-        |
-        v
-Databricks Unity Catalog external location
-        |
-        v
-Bronze Delta tables
-        |
-        v
-Silver cleaned relational model
-        |
-        v
-Gold Power BI-ready analytics tables
-        |
-        v
-Power BI dashboards
+- `16` years of annual MFinante financial statement datasets from `2010` to `2025`
+- one normalized company dimension row per legal entity in the warehouse
+- one financial fact row per company and reporting year
+
+The warehouse is meant to cover all companies present in the Romanian public source data, not a sample dataset. The exact current company count depends on the latest Databricks load and can be checked directly with:
+
+```sql
+SELECT COUNT(*) AS company_count
+FROM company_ro.silver.dim_firma;
 ```
 
-The repository currently contains the ingestion application, AWS helper infrastructure files, dataset configuration, and Databricks notebooks.
+For each company, the model is designed to store a mix of identity, registry, classification, geography, and finance data such as:
 
-## Repository Layout
+- company name, CUI, and registration number
+- legal status and legal form
+- county, locality, and registered address
+- authorized CAEN activities
+- annual reported CAEN activity from MFinante
+- turnover, total revenue, total expenses, gross and net profit
+- equity, debt, capital, assets, receivables, inventories, cash
+- employee counts across reporting years
 
-```text
-.
-+-- app/
-|   +-- downloader.py       # Main ingestion entrypoint
-|   +-- ckan_client.py      # data.gov.ro CKAN API client
-|   +-- processors.py       # Dataset/resource selection and S3 key logic
-|   +-- s3_utils.py         # Download-to-temp and upload-to-S3 utilities
-|   +-- utils.py            # Filename, metadata, and matching helpers
-+-- config/
-|   +-- datasets.json       # Source dataset definitions
-+-- infra/
-|   +-- ecs-task-definition.json
-|   +-- iam/                # IAM policy/trust-policy templates
-+-- notebooks/
-|   +-- 00_bronze_layer/
-|   +-- 01_silver_layer/
-|   +-- 02_gold_layer/
-+-- Dockerfile
-+-- requirements.txt
-+-- architecture.drawio
+## Tech Stack
+
+- AWS ECS Fargate
+- Docker
+- Python `3.12`
+- Amazon S3
+- Databricks
+- Unity Catalog
+- PySpark
+- Delta Lake
+- Power BI
+
+## Diagrams
+
+- [Architecture Diagram](C:/ro_company_analytics/Images/architecture.drawio)
+- [dbdiagram Source](C:/ro_company_analytics/silver_star_schema.dbml)
+
+```mermaid
+flowchart TD
+    sources["Romanian Government APIs<br/>ONRC / MFinante / data.gov.ro"]
+    ingestion["AWS ECS Fargate<br/>containerized ingestion"]
+    s3["AWS S3 Raw Data Lake<br/>raw_v2 snapshots + metadata"]
+    adapter["Unity Catalog external location<br/>S3 access adapter"]
+    bronze["Bronze Layer"]
+    silver["Silver Layer"]
+    gold["Gold Layer"]
+    powerbi["Power BI"]
+
+    sources --> ingestion
+    ingestion --> s3
+    s3 --> adapter
+    adapter --> bronze
+    bronze --> silver
+    silver --> gold
+    gold --> powerbi
 ```
+
+![Silver Data Model](C:/ro_company_analytics/Images/data_model.svg)
+
+## What It Does
+
+- Pulls Romanian public company data from ONRC / MFinante / `data.gov.ro` API-backed datasets
+- Runs containerized ingestion on AWS ECS Fargate
+- Stores raw snapshots in S3 under `raw_v2`
+- Uses Databricks with Unity Catalog to read and transform the lake
+- Produces normalized Silver entities and BI-ready Gold outputs
+- Feeds Power BI dashboards and reporting
 
 ## Source Data
 
 Configured sources are defined in `config/datasets.json`.
 
-Main datasets:
+Main sources:
 
-- ONRC company registry files, including `od_firme.csv`, `od_caen_autorizat.csv`, and `od_stare_firma.csv`.
-- ONRC nomenclatures, including `n_caen.csv`, `n_stare_firma.csv`, and `n_versiune_caen.csv`.
-- MFinante annual financial statement files named like `web_uu_anYYYY.txt` or `web_uu_anYYYY.csv`.
-- MFinante taxpayer identification data.
+- ONRC company registry data
+- ONRC authorized CAEN mappings
+- ONRC company status data
+- ONRC CAEN nomenclature
+- MFinante annual financial statements
 
-The MFinante annual financial files are stored by actual source year:
+Key raw file patterns:
+
+- `od_firme.csv`
+- `od_caen_autorizat.csv`
+- `od_stare_firma.csv`
+- `n_caen.csv`
+- `n_stare_firma.csv`
+- `web_uu_anYYYY.txt`
+- `web_uu_anYYYY.csv`
+
+The annual MFinante files are stored by actual source year:
 
 ```text
 s3://ro-company-lake/raw_v2/mfinante/situatii_financiare_uu/
@@ -76,14 +106,14 @@ s3://ro-company-lake/raw_v2/mfinante/situatii_financiare_uu/
       web_uu_an2025.txt
 ```
 
-This partitioning is important because older CKAN packages can contain mixed or inconsistent yearly resources.
+That partitioning matters because historical CKAN packages are inconsistent and sometimes bundle multiple years together.
 
-## Local Ingestion Run
+## Running Ingestion
 
 Prerequisites:
 
-- Python 3.12
-- AWS credentials with permission to write to the target S3 bucket
+- Python `3.12`
+- AWS credentials with write access to the target S3 bucket
 - Network access to `https://data.gov.ro`
 
 Install dependencies:
@@ -92,7 +122,7 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Run the downloader:
+Run locally:
 
 ```powershell
 $env:S3_BUCKET = "ro-company-lake"
@@ -101,18 +131,19 @@ $env:CONFIG_PATH = "config/datasets.json"
 python app/downloader.py
 ```
 
-The downloader:
+The ingestion app:
 
-- Reads dataset definitions from `config/datasets.json`.
-- Searches or loads packages through the CKAN API.
-- Filters resources by filename patterns.
-- Downloads each source file to a temporary local file.
-- Uploads the file to S3 with source metadata.
-- Skips files that already exist at the target S3 key.
+- reads `config/datasets.json`
+- queries CKAN/API resources
+- filters matching files
+- downloads to temporary local storage
+- uploads raw files to S3
+- writes useful source metadata
+- skips files already present at the target key
 
 ## AWS Deployment
 
-Intended AWS components:
+Main AWS components:
 
 - ECR repository: `ro-company-downloader`
 - ECS cluster: `ro-company-cluster`
@@ -121,15 +152,14 @@ Intended AWS components:
 - S3 bucket: `ro-company-lake`
 - AWS region: `eu-central-1`
 
-Build and push the container image to ECR, then run it as an ECS Fargate task using `infra/ecs-task-definition.json` as the task definition template.
+Intended automation path:
 
-The intended automation path is:
+- EventBridge Scheduler triggers ECS Fargate once per month
+- ECS runs the containerized ingestion task
+- Raw snapshots land in S3
+- Databricks reads the new snapshot and runs Bronze -> Silver -> Gold
 
-```text
-EventBridge Scheduler -> ECS Fargate task -> Python downloader -> S3 raw_v2
-```
-
-## Databricks Model
+## Databricks Workflow
 
 Unity Catalog objects:
 
@@ -137,7 +167,7 @@ Unity Catalog objects:
 - Schemas: `bronze`, `silver`, `gold`
 - External location: `s3://ro-company-lake/raw_v2/`
 
-Recommended workflow order:
+Current notebook execution order:
 
 1. `notebooks/00_bronze_layer/bronze_onrc_firme.ipynb`
 2. `notebooks/00_bronze_layer/bronze_onrc_caen_autorizat.ipynb`
@@ -146,40 +176,36 @@ Recommended workflow order:
 5. `notebooks/00_bronze_layer/bronze_mfinante_uu_all_years.ipynb`
 6. `notebooks/01_silver_layer/silver_onrc_dimensions.ipynb`
 7. `notebooks/01_silver_layer/silver_fact_financiar_anual.ipynb`
-8. `notebooks/01_silver_layer/silver_caen_dimension.ipynb`
-9. `notebooks/02_gold_layer/gold_company_financial_summary.ipynb`
-10. `notebooks/02_gold_layer/gold_location_caen_year_stats.ipynb`
-11. `notebooks/02_gold_layer/gold_top_companies.ipynb`
-12. Quality checks
+8. `notebooks/02_gold_layer/gold_company_financial_summary.ipynb`
+9. `notebooks/02_gold_layer/gold_location_caen_year_stats.ipynb`
+10. `notebooks/02_gold_layer/gold_top_companies.ipynb`
 
-## Tables
+## Silver Data Model
 
-Bronze tables keep source-shaped Delta data:
-
-- `company_ro.bronze.onrc_firme_raw`
-- `company_ro.bronze.onrc_caen_autorizat_raw`
-- `company_ro.bronze.onrc_stare_firma_raw`
-- `company_ro.bronze.n_caen_raw`
-- `company_ro.bronze.n_stare_firma_raw`
-- `company_ro.bronze.mfinante_uu_raw`
-- `company_ro.bronze.mfinante_uu_schema_raw`
-
-Silver tables provide the reusable relational model:
+Silver tables:
 
 - `company_ro.silver.dim_firma`
-- `company_ro.silver.bridge_firma_caen`
+- `company_ro.silver.dim_stare_firma`
+- `company_ro.silver.dim_forma_juridica`
+- `company_ro.silver.dim_localitate`
+- `company_ro.silver.dim_adresa`
 - `company_ro.silver.dim_caen`
+- `company_ro.silver.bridge_firma_caen`
 - `company_ro.silver.fact_financiar_anual`
 
-Gold tables are intended for Power BI:
+## Gold Outputs
+
+Gold tables:
 
 - `company_ro.gold.company_financial_summary`
 - `company_ro.gold.location_caen_year_stats`
 - `company_ro.gold.top_companies_by_year`
 
+Gold is intentionally denormalized for Power BI consumption. Silver remains the normalized source of truth.
+
 ## Power BI
 
-Power BI should connect primarily to Gold tables. Recommended slicers include:
+Recommended slicers:
 
 - `an`
 - `judet`
@@ -190,7 +216,7 @@ Power BI should connect primarily to Gold tables. Recommended slicers include:
 - `denumire`
 - `stare_firma`
 
-Recommended measures include:
+Recommended measures:
 
 - `SUM(cifra_afaceri)`
 - `SUM(profit_net)`
@@ -200,9 +226,17 @@ Recommended measures include:
 - `SUM(capitaluri_proprii)`
 - `COUNTDISTINCT(cui)`
 
-## Notes
+## Security Notes
 
-- Do not use `bridge_firma_caen` for financial aggregation unless you intentionally handle many-to-many duplication.
-- Use `fact_financiar_anual.cod_caen_mfinante` for financial CAEN analysis.
-- In Unity Catalog, prefer `_metadata.file_path` instead of `input_file_name()`.
-- Keep Bronze close to source data, Silver clean and reusable, and Gold shaped for Power BI consumption.
+No live credentials or private keys were found in tracked project files during the repo check. The ignore list was tightened to also cover common local security/state artifacts:
+
+- `.databrickscfg`
+- `.databricks/`
+- `.terraform/`
+- `*.tfstate*`
+- `*.tfvars`
+- `.ipynb_checkpoints/`
+
+Important modeling rule:
+
+- Do not aggregate financial measures through `bridge_firma_caen` unless you intentionally handle many-to-many duplication.

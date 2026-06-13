@@ -1,0 +1,121 @@
+Project ro_company_analytics_silver_3nf {
+  database_type: "PostgreSQL"
+  Note: '''
+  Strict 3NF-oriented Silver ER diagram for dbdiagram.io.
+  Changes versus the looser analytical version:
+  - dim_firma does not store localitate_key if address already determines locality
+  - dim_firma does not store derived an_infiintare
+  - dim_caen keeps only the base CAEN code and description, not derivable hierarchy fields
+  Cardinality is shown in Ref statements:
+  ">" means many-to-one
+  "<" means one-to-many
+  '''
+}
+
+Table fact_financiar_anual {
+  financiar_key varchar [pk]
+  cui varchar [not null]
+  an int [not null]
+  cod_caen_mfinante varchar
+  active_imobilizate decimal
+  active_circulante decimal
+  stocuri decimal
+  creante decimal
+  casa_si_conturi decimal
+  cheltuieli_in_avans decimal
+  datorii decimal
+  venituri_in_avans decimal
+  provizioane decimal
+  capitaluri_proprii decimal
+  capital_social decimal
+  cifra_afaceri decimal
+  venituri_totale decimal
+  cheltuieli_totale decimal
+  profit_brut decimal
+  pierdere_bruta decimal
+  profit_net decimal
+  pierdere_neta decimal
+  nr_mediu_salariati int
+  _ingested_at timestamp
+  _source_file varchar
+
+  Note: 'Fact table. Grain: one row per company + year.'
+}
+
+Table dim_firma {
+  firma_key varchar [pk]
+  cod_inmatriculare varchar [not null]
+  cui varchar [not null]
+  denumire varchar
+  cod_stare_firma varchar [not null]
+  forma_juridica_key varchar
+  adresa_key varchar
+  _ingested_at timestamp
+  _source_file varchar
+
+  Note: 'Company entity. Locality is reached transitively through address.'
+}
+
+Table dim_caen {
+  caen_key varchar [pk]
+  cod_caen varchar [not null]
+  denumire varchar
+  versiune_caen varchar
+  _ingested_at timestamp
+  _source_file varchar
+
+  Note: 'Base CAEN lookup. Hierarchy values like grupa/clasa are derivable from cod_caen and omitted here.'
+}
+
+Table bridge_firma_caen {
+  firma_caen_key varchar [pk]
+  cod_inmatriculare varchar [not null]
+  cod_caen varchar [not null]
+  versiune_caen varchar
+  _ingested_at timestamp
+  _source_file varchar
+
+  Note: 'Bridge between company registration and authorized CAEN codes.'
+}
+
+Table dim_stare_firma {
+  cod_stare_firma varchar [pk]
+  stare_firma varchar
+  is_activa boolean
+
+  Note: 'Company status lookup.'
+}
+
+Table dim_forma_juridica {
+  forma_juridica_key varchar [pk]
+  forma_juridica varchar
+
+  Note: 'Legal form lookup.'
+}
+
+Table dim_localitate {
+  localitate_key varchar [pk]
+  judet varchar
+  localitate varchar
+
+  Note: 'Location entity.'
+}
+
+Table dim_adresa {
+  adresa_key varchar [pk]
+  localitate_key varchar [not null]
+  adresa varchar
+
+  Note: 'Address entity linked to locality.'
+}
+
+Ref: dim_firma.cui < fact_financiar_anual.cui // one company to many annual fact rows
+Ref: dim_caen.cod_caen < fact_financiar_anual.cod_caen_mfinante // one CAEN to many annual fact rows
+
+Ref: dim_firma.cod_inmatriculare < bridge_firma_caen.cod_inmatriculare // one company to many authorized CAEN rows
+Ref: dim_caen.cod_caen < bridge_firma_caen.cod_caen // one CAEN to many bridge rows
+
+Ref: dim_stare_firma.cod_stare_firma < dim_firma.cod_stare_firma // one status to many companies
+Ref: dim_forma_juridica.forma_juridica_key < dim_firma.forma_juridica_key // one legal form to many companies
+Ref: dim_adresa.adresa_key < dim_firma.adresa_key // one address to many companies
+Ref: dim_localitate.localitate_key < dim_adresa.localitate_key // one locality to many addresses
