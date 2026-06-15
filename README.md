@@ -22,11 +22,11 @@ For each company, the model is designed to store a mix of identity, registry, cl
 
 ## Tech Stack
 
-- AWS (`ECS Fargate`, `S3 Bucket`, `ECR`, `EventBridge`, `CloudWatch`)
-- Docker
-- Python (PySpark)
+- Python and PySpark
 - SQL
 - Databricks
+- AWS (`ECS Fargate`, `S3 Bucket`, `ECR`, `EventBridge`, `CloudWatch`)
+- Docker
 - Power BI
 
 ## Data Model Diagram
@@ -40,8 +40,6 @@ For each company, the model is designed to store a mix of identity, registry, cl
 - Uses Databricks with Unity Catalog to read and transform the lake
 - Produces normalized Silver entities and BI-ready Gold outputs
 - Feeds Power BI dashboards and reporting
-
-## Impact
 
 This app turns fragmented Romanian public company data into a usable analytical platform. Instead of manually combining messy registry files, CAEN mappings, company status tables, and yearly financial statement exports, it gives you a single warehouse that can be queried consistently across companies, industries, years, and geographies.
 
