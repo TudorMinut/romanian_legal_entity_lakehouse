@@ -156,7 +156,3 @@ display(
 # Sample records
 print("\n=== Sample Records ===")
 display(silver_table.orderBy(F.desc("an"), F.desc("cifra_afaceri")).limit(10))
-
-# COMMAND ----------
-
-

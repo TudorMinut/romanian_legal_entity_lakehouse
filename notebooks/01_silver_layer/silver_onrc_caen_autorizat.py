@@ -118,7 +118,3 @@ print(f"Companies with multiple CAEN codes: {multi_caen.count():,}")
 # Sample records
 print("\n=== Sample Records ===")
 display(silver_table.limit(20))
-
-# COMMAND ----------
-
-

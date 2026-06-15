@@ -69,16 +69,86 @@ firme_cleaned = (
         clean_digits(first_existing(firme_raw, ["CUI", "COD_FISCAL", "CIF", "COD_UNIC_INREGISTRARE"])).alias("cui"),
         clean_text(first_existing(firme_raw, ["DENUMIRE", "DENUMIRE_FIRMA", "NUME_FIRMA"])).alias("denumire"),
         clean_text(first_existing(firme_raw, ["FORMA_JURIDICA", "FORMA_ORGANIZARE", "TIP_FIRMA"])).alias("forma_juridica"),
-        clean_digits(first_existing(firme_raw, ["COD_STARE_FIRMA", "COD_STARE", "STARE"])).alias("cod_stare_firma"),
+        clean_digits(first_existing(firme_raw, ["COD_STARE_FIRMA", "COD_STARE", "STARE"])).alias("cod_stare_firma_raw"),
         clean_upper(first_existing(firme_raw, ["JUDET", "DEN_JUDET", "DENUMIRE_JUDET", "ADR_JUDET"])).alias("judet"),
-        clean_upper(first_existing(firme_raw, ["LOCALITATE", "DEN_LOCALITATE", "DENUMIRE_LOCALITATE", "ORAS", "MUNICIPIU"])).alias("localitate"),
-        clean_text(first_existing(firme_raw, ["ADRESA", "ADRESA_COMPLETA", "ADR_COMPLETA"])).alias("adresa"),
+        clean_upper(first_existing(firme_raw, ["LOCALITATE", "DEN_LOCALITATE", "DENUMIRE_LOCALITATE", "ADR_LOCALITATE", "ORAS", "MUNICIPIU"])).alias("localitate"),
+        # Construct address from components (bronze has separate address fields)
+        F.concat_ws(
+            ", ",
+            clean_text(first_existing(firme_raw, ["ADR_DEN_STRADA", "STRADA"])),
+            clean_text(first_existing(firme_raw, ["ADR_NR_STRADA", "NUMAR"])),
+            clean_text(first_existing(firme_raw, ["ADR_BLOC", "BLOC"])),
+            clean_text(first_existing(firme_raw, ["ADR_SCARA", "SCARA"])),
+            clean_text(first_existing(firme_raw, ["ADR_ETAJ", "ETAJ"])),
+            clean_text(first_existing(firme_raw, ["ADR_APARTAMENT", "APARTAMENT"]))
+        ).alias("adresa_raw"),
         first_existing(firme_raw, ["_ingested_at", "INGESTED_AT"]).alias("_ingested_at"),
         first_existing(firme_raw, ["_source_file", "SOURCE_FILE"]).alias("_source_file")
     )
     .filter(F.col("cod_inmatriculare").isNotNull())
     .filter(F.col("cod_inmatriculare") != "")
     .dropDuplicates(["cod_inmatriculare"])
+)
+
+# Clean constructed address (remove empty parts, leading/trailing commas)
+firme_cleaned = firme_cleaned.withColumn(
+    "adresa",
+    F.when(
+        (F.col("adresa_raw").isNotNull()) & (F.trim(F.col("adresa_raw")) != ""),
+        F.trim(F.regexp_replace(F.regexp_replace(F.col("adresa_raw"), r"^[,\s]+|[,\s]+$", ""), r",\s*,+", ","))
+    ).otherwise(None)
+).drop("adresa_raw")
+
+# Load company status data and get the latest status per company
+status_raw = spark.table("company_ro.bronze.onrc_stare_firma_raw")
+status_nomenclature = spark.table("company_ro.bronze.n_stare_firma_raw")
+
+# Get latest status per company (by ingestion timestamp, then by status code for deterministic ordering)
+from pyspark.sql.window import Window
+window_spec = Window.partitionBy("COD_INMATRICULARE").orderBy(F.desc("_ingested_at"), F.desc("COD"))
+
+latest_status = (
+    status_raw
+    .withColumn("rn", F.row_number().over(window_spec))
+    .filter(F.col("rn") == 1)
+    .drop("rn", "_ingested_at", "_source_file")
+    .join(
+        status_nomenclature.select(
+            F.col("COD").alias("status_cod"),
+            F.col("DENUMIRE").alias("status_denumire")
+        ),
+        F.col("COD") == F.col("status_cod"),
+        "left"
+    )
+    .select(
+        "COD_INMATRICULARE",
+        F.col("COD").alias("cod_stare_firma"),
+        F.col("status_denumire").alias("stare_firma")
+    )
+)
+
+# Join companies with latest status
+firme_cleaned = (
+    firme_cleaned
+    .join(
+        latest_status,
+        firme_cleaned["cod_inmatriculare"] == latest_status["COD_INMATRICULARE"],
+        "left"
+    )
+    .select(
+        firme_cleaned["cod_inmatriculare"],
+        firme_cleaned["cui"],
+        firme_cleaned["denumire"],
+        firme_cleaned["forma_juridica"],
+        latest_status["cod_stare_firma"],
+        latest_status["stare_firma"],
+        firme_cleaned["judet"],
+        firme_cleaned["localitate"],
+        firme_cleaned["adresa"],
+        firme_cleaned["_ingested_at"],
+        firme_cleaned["_source_file"]
+    )
+    .dropDuplicates(["cod_inmatriculare"])  # Ensure uniqueness for merge
 )
 
 print(f"Cleaned {firme_cleaned.count():,} companies")
@@ -96,6 +166,7 @@ CREATE TABLE IF NOT EXISTS company_ro.silver.onrc_firme (
   denumire STRING,
   forma_juridica STRING,
   cod_stare_firma STRING,
+  stare_firma STRING,
   judet STRING,
   localitate STRING,
   adresa STRING,
@@ -135,6 +206,10 @@ print(f"Null CUI: {silver_table.filter(F.col('cui').isNull() | (F.col('cui') == 
 print(f"Null denumire: {silver_table.filter(F.col('denumire').isNull() | (F.col('denumire') == '')).count():,}")
 print(f"With forma_juridica: {silver_table.filter(F.col('forma_juridica').isNotNull() & (F.col('forma_juridica') != '')).count():,}")
 print(f"With address: {silver_table.filter(F.col('adresa').isNotNull() & (F.col('adresa') != '')).count():,}")
+print(f"With judet: {silver_table.filter(F.col('judet').isNotNull() & (F.col('judet') != '')).count():,}")
+print(f"With localitate: {silver_table.filter(F.col('localitate').isNotNull() & (F.col('localitate') != '')).count():,}")
+print(f"With status (cod_stare_firma): {silver_table.filter(F.col('cod_stare_firma').isNotNull()).count():,}")
+print(f"With status description (stare_firma): {silver_table.filter(F.col('stare_firma').isNotNull()).count():,}")
 
 # Legal form distribution
 print("\n=== Top Legal Forms ===")
@@ -148,8 +223,8 @@ display(
 
 # Sample records
 print("\n=== Sample Records ===")
-display(silver_table.limit(10))
-
-# COMMAND ----------
-
-
+display(silver_table.select(
+    'cod_inmatriculare', 'cui', 'denumire', 'forma_juridica',
+    'cod_stare_firma', 'stare_firma',
+    'judet', 'localitate', 'adresa'
+).limit(10))

@@ -66,12 +66,12 @@ n_caen_raw = normalize_columns(spark.table("company_ro.bronze.n_caen_raw"))
 n_caen_cleaned = (
     n_caen_raw
     .select(
-        clean_digits(first_existing(n_caen_raw, ["COD", "COD_CAEN", "CAEN"])).alias("cod_caen"),
-        clean_text(first_existing(n_caen_raw, ["DENUMIRE", "DENUMIRE_CAEN", "DEN_CAEN"])).alias("denumire_caen"),
-        clean_text(first_existing(n_caen_raw, ["GRUPA", "GRUPA_CAEN", "SECTIUNEA"])).alias("grupa_caen"),
-        clean_text(first_existing(n_caen_raw, ["VERSIUNE", "VER_CAEN", "VERSIUNE_CAEN"])).alias("versiune_caen"),
-        first_existing(n_caen_raw, ["_ingested_at", "INGESTED_AT"]).alias("_ingested_at"),
-        first_existing(n_caen_raw, ["_source_file", "SOURCE_FILE"]).alias("_source_file")
+        clean_digits(first_existing(n_caen_raw, ["CLASA", "COD", "COD_CAEN"])).alias("cod_caen"),
+        clean_text(first_existing(n_caen_raw, ["DENUMIRE", "DENUMIRE_CAEN"])).alias("denumire_caen"),
+        clean_text(first_existing(n_caen_raw, ["GRUPA", "SECTIUNEA"])).alias("grupa_caen"),
+        clean_text(first_existing(n_caen_raw, ["VERSIUNE_CAEN", "VERSIUNE"])).alias("versiune_caen"),
+        first_existing(n_caen_raw, ["_ingested_at"]).alias("_ingested_at"),
+        first_existing(n_caen_raw, ["_source_file"]).alias("_source_file")
     )
     .filter(F.col("cod_caen").isNotNull())
     .filter(F.col("cod_caen") != "")
@@ -130,7 +130,3 @@ print(f"Null denumire_caen: {silver_table.filter(F.col('denumire_caen').isNull()
 # Sample records
 print("\n=== Sample Records ===")
 display(silver_table.orderBy("cod_caen").limit(10))
-
-# COMMAND ----------
-
-

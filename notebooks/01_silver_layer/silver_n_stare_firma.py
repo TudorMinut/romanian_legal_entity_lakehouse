@@ -110,7 +110,3 @@ print(f"Null cod_stare_firma: {silver_table.filter(F.col('cod_stare_firma').isNu
 # Sample records
 print("\n=== Sample Records ===")
 display(silver_table.orderBy("cod_stare_firma"))
-
-# COMMAND ----------
-
-

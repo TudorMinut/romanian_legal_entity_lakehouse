@@ -75,7 +75,3 @@ display(
 # Sample records
 print("\n=== Sample Records ===")
 display(silver_table.orderBy("source_year").limit(20))
-
-# COMMAND ----------
-
-

@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # DBTITLE 1,Initialize catalog and helper functions
 from pyspark.sql import functions as F
 import re
@@ -110,7 +114,3 @@ display(
 # Sample records
 print("\n=== Sample Records ===")
 display(silver_table.limit(10))
-
-# COMMAND ----------
-
-

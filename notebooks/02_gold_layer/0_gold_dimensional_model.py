@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # DBTITLE 1,Initialize catalog and helper functions
 from pyspark.sql import functions as F
 
@@ -245,37 +249,34 @@ print(f"✓ MERGED company_ro.gold.bridge_firma_caen: {bridge_firma_caen.count()
 # COMMAND ----------
 
 # DBTITLE 1,Create fact_financiar_anual (fact table)
-# Fact Table: Annual Financial Data
+# Fact Table: Annual Financial Data with proper type casting
 fact_financiar_anual = (
     mfinante
-    .withColumn(
-        "financiar_key",
-        hash_key(F.col("cui"), F.col("an"))
-    )
+    .withColumn("financiar_key", hash_key(F.col("cui"), F.col("an")))
     .select(
         "financiar_key",
-        "cui",
-        "an",
-        "cod_caen_mfinante",
-        "active_imobilizate",
-        "active_circulante",
-        "stocuri",
-        "creante",
-        "casa_si_conturi",
-        "cheltuieli_in_avans",
-        "datorii",
-        "venituri_in_avans",
-        "provizioane",
-        "capitaluri_proprii",
-        "capital_social",
-        "cifra_afaceri",
-        "venituri_totale",
-        "cheltuieli_totale",
-        "profit_brut",
-        "pierdere_bruta",
-        "profit_net",
-        "pierdere_neta",
-        "nr_mediu_salariati",
+        F.col("cui").cast("string"),
+        F.col("an").cast("int"),
+        F.col("cod_caen_mfinante").cast("string"),
+        F.col("active_imobilizate").cast("decimal(18,2)"),
+        F.col("active_circulante").cast("decimal(18,2)"),
+        F.col("stocuri").cast("decimal(18,2)"),
+        F.col("creante").cast("decimal(18,2)"),
+        F.col("casa_si_conturi").cast("decimal(18,2)"),
+        F.col("cheltuieli_in_avans").cast("decimal(18,2)"),
+        F.col("datorii").cast("decimal(18,2)"),
+        F.col("venituri_in_avans").cast("decimal(18,2)"),
+        F.col("provizioane").cast("decimal(18,2)"),
+        F.col("capitaluri_proprii").cast("decimal(18,2)"),
+        F.col("capital_social").cast("decimal(18,2)"),
+        F.col("cifra_afaceri").cast("decimal(18,2)"),
+        F.col("venituri_totale").cast("decimal(18,2)"),
+        F.col("cheltuieli_totale").cast("decimal(18,2)"),
+        F.col("profit_brut").cast("decimal(18,2)"),
+        F.col("pierdere_bruta").cast("decimal(18,2)"),
+        F.col("profit_net").cast("decimal(18,2)"),
+        F.col("pierdere_neta").cast("decimal(18,2)"),
+        F.col("nr_mediu_salariati").cast("int"),
         "_ingested_at",
         "_source_file"
     )
@@ -313,14 +314,9 @@ CREATE TABLE IF NOT EXISTS company_ro.gold.fact_financiar_anual (
 USING DELTA
 """)
 
-# Get existing years in fact table
-existing_years = (
-    spark.table("company_ro.gold.fact_financiar_anual")
-    .select("an")
-    .distinct()
-    .rdd.flatMap(lambda x: x)
-    .collect()
-)
+# Get existing years in fact table (serverless-compatible)
+existing_years_df = spark.table("company_ro.gold.fact_financiar_anual").select("an").distinct()
+existing_years = [row.an for row in existing_years_df.collect()]
 
 # Filter to only NEW years (facts are immutable)
 new_facts = fact_financiar_anual.filter(~F.col("an").isin(existing_years))
@@ -362,7 +358,3 @@ for table_name in tables:
     print(f"  {table_name}: {count:,} rows")
 
 print("\n✓ Gold dimensional model created successfully!")
-
-# COMMAND ----------
-
-
